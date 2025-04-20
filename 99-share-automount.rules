@@ -1,0 +1,12 @@
+# udev rule to automatically configure and share newly added USB partitions
+
+# Trigger on partition add events for block devices
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="partition"
+
+# Ensure necessary filesystem info is available from blkid
+ENV{ID_FS_UUID_ENC}=="?*", ENV{ID_FS_TYPE}=="?*"
+
+# Run the management script, passing the device name
+# Use RUN+= instead of RUN= to avoid interfering with other rules
+# Use absolute path to the script
+RUN+="/usr/local/sbin/manage_storage.sh $env{DEVNAME}"
