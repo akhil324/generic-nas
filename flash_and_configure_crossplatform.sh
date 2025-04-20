@@ -320,7 +320,7 @@ else
 fi
 
 echo "INFO: Copying udev rule..."
-cp "${SCRIPT_DIR}/99-share-automount.rules" "${MOUNT_POINT}/udev_rules/" || error "Failed to copy udev rule"
+cp "${SCRIPT_DIR}/udev_rules/99-share-automount.rules" "${MOUNT_POINT}/udev_rules/" || error "Failed to copy udev rule"
 
 echo "INFO: Copying .env configuration file..."
 cp "$ENV_FILE" "${MOUNT_POINT}/.env" || error "Failed to copy $ENV_FILE"
