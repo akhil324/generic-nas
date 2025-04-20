@@ -1,0 +1,73 @@
+:root {
+            --bg-color: #1a1a1a; --text-color: #d0d0d0; --header-color: #569cd6;
+            --label-color: #9cdcfe; --border-color: #444; --bar-bg: #333;
+            --section-bg: #222; --table-header-bg: #2a2a2a; --link-color: #4fc1ff;
+            --ok-color: #4CAF50; --low-warn-color: #8BC34A; --high-warn-color: #FFC107;
+            --crit-color: #F44336; --bar-disk: #03A9F4;
+            --font-mono: "DejaVu Sans Mono", "Consolas", "Menlo", monospace;
+        }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: var(--font-mono); font-size: 13px; line-height: 1.5; margin: 0; padding: 0; }
+        a { color: var(--link-color); text-decoration: none; } a:hover { text-decoration: underline; }
+        .container { max-width: 1200px; margin: 10px auto; padding: 0 15px; }
+        .banner { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+        .banner h1 { margin: 0; font-size: 1.5em; color: var(--header-color); }
+        .banner-actions button { background-color: var(--crit-color); color: white; border: none; padding: 6px 12px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; border-radius: 3px; }
+        .banner-actions button:hover:not(:disabled) { opacity: 0.8; } .banner-actions button:disabled { background-color: #555; cursor: not-allowed; opacity: 0.6; }
+        .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 8px; background-color: var(--section-bg); border: 1px solid var(--border-color); border-radius: 4px; }
+        .header-item { margin: 0 10px; white-space: nowrap; } .header-label { color: var(--label-color); margin-right: 5px; } .header-value { color: var(--text-color); }
+        .main-layout { display: flex; flex-wrap: wrap; gap: 15px; } .column { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; }
+        .section { background-color: var(--section-bg); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px 15px; }
+        .section-title { color: var(--header-color); font-size: 1.1em; margin-top: 0; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--border-color); }
+
+        /* Definition List Styling - Updated width */
+        dl { margin: 0; padding: 0; }
+        dt {
+            color: var(--label-color);
+            width: 105px; /* Increased width to fit "SMB Clients:" */
+            float: left;
+            clear: left;
+            margin-right: 10px;
+            text-align: right;
+            white-space: nowrap;
+            /* Removed overflow and text-overflow */
+        }
+        dd {
+            margin-left: 115px; /* Adjusted margin = dt width + margin-right */
+            margin-bottom: 3px;
+            white-space: nowrap; /* Keep dd content on one line for now */
+        }
+        dd:after { content: ""; display: table; clear: both; }
+
+        /* Table Styling */
+        .io-table, .proc-table { width: 100%; border-collapse: collapse; table-layout: fixed; } /* Keep fixed for overall layout control */
+        .io-table th, .proc-table th { text-align: left; color: var(--label-color); padding: 4px 6px; border-bottom: 1px solid var(--border-color); background-color: var(--table-header-bg); white-space: nowrap; }
+        .io-table td, .proc-table td { padding: 3px 6px; vertical-align: top; } /* Base style for td */
+
+        /* IO Table Column Widths/Alignment */
+        .io-table th:nth-child(1), .io-table td:nth-child(1) { width: 25%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* Allow Name truncation */
+        .io-table th:nth-child(2), .io-table td:nth-child(2) { width: 20%; text-align: right; white-space: nowrap; } /* No truncation */
+        .io-table th:nth-child(3), .io-table td:nth-child(3) { width: 20%; text-align: right; white-space: nowrap; } /* No truncation */
+        .io-table th:nth-child(4), .io-table td:nth-child(4) { width: 17%; text-align: right; white-space: nowrap; } /* No truncation */
+        .io-table th:nth-child(5), .io-table td:nth-child(5) { width: 18%; text-align: right; white-space: nowrap; } /* No truncation */
+        .service-io-table th:nth-child(4), .service-io-table td:nth-child(4), .service-io-table th:nth-child(5), .service-io-table td:nth-child(5) { width: 17.5%; }
+
+        /* Process Table Column Widths/Alignment - Updated */
+        .proc-table th:nth-child(1), .proc-table td:nth-child(1) { width: 8%; text-align: right; white-space: nowrap; } /* PID */
+        .proc-table th:nth-child(2), .proc-table td:nth-child(2) { width: 12%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* User */
+        .proc-table th:nth-child(3), .proc-table td:nth-child(3) { width: 8%; text-align: right; white-space: nowrap; } /* CPU% */
+        .proc-table th:nth-child(4), .proc-table td:nth-child(4) { width: 8%; text-align: right; white-space: nowrap; } /* MEM% */
+        /* --- Adjusted Widths --- */
+        .proc-table th:nth-child(5), .proc-table td:nth-child(5) { width: 15%; text-align: right; white-space: nowrap; } /* Memory (Abs) - Increased width */
+        .proc-table th:nth-child(6), .proc-table td:nth-child(6) { width: 49%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* Name - Decreased width */
+        /* --- Total still 100% (8+12+8+8+15+49 = 100) --- */
+
+        /* Utility Classes */
+        .error { color: var(--crit-color); font-weight: bold; } .info { color: var(--label-color); font-style: italic; } .dim { color: #888; }
+        .cpu-cores { column-count: 2; column-gap: 15px; margin-top: 5px; } .cpu-cores .bar-container { display: inline-block; width: 98%; margin-bottom: 3px; break-inside: avoid; }
+        .bar-container { display: inline-block; position: relative; height: 18px; background-color: var(--bar-bg); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-bottom: 3px; }
+        .bar-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px 0 0 3px; transition: width 0.3s ease-out; }
+        .bar-fill.ok { background-color: var(--ok-color); } .bar-fill.low-warn { background-color: var(--low-warn-color); } .bar-fill.high-warn { background-color: var(--high-warn-color); }
+        .bar-fill.crit { background-color: var(--crit-color); } .bar-fill.disk { background-color: var(--bar-disk); }
+        .bar-text { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 6px; color: #fff; text-shadow: 1px 1px 1px rgba(0,0,0,0.4); white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+        .bar-text .label { overflow: hidden; text-overflow: ellipsis; margin-right: 5px; } .bar-text .value { flex-shrink: 0; }
+        .connections-list { list-style: none; padding-left: 15px; margin: 5px 0; } .connections-list li { margin-bottom: 2px; }
