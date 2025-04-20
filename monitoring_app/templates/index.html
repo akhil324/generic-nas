@@ -4,303 +4,562 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="refresh" content="5">
-    <title>RPi Monitor - {{ data.hostname }}</title>
+    <title>System Monitor - {{ data.hostname }}</title>
     <style>
         :root {
-            --bg-color: #1a1a1a; --text-color: #d0d0d0; --header-color: #569cd6;
-            --label-color: #9cdcfe; --value-color: #d4d4d4; --border-color: #444;
+            --bg-color: #1a1a1a;
+            --text-color: #d0d0d0;
+            --header-color: #569cd6; /* Brighter Blue */
+            --label-color: #9cdcfe;  /* Lighter Blue */
+            --border-color: #444;
             --bar-bg: #333;
-            /* 4-Level Colors (Adjusted for better contrast/meaning) */
-            --ok-color: #4CAF50; /* Green */
-            --low-warn-color: #8BC34A; /* Lime Green */
-            --high-warn-color: #FFC107; /* Amber */
-            --crit-color: #F44336; /* Red */
+            --section-bg: #222;
+            --table-header-bg: #2a2a2a;
+            --link-color: #4fc1ff;
 
-            --bar-cpu: var(--ok-color); --bar-mem: var(--ok-color);
-            --bar-disk: #03A9F4; /* Light Blue for Disk */
+            /* Status Colors */
+            --ok-color: #4CAF50;       /* Green */
+            --low-warn-color: #8BC34A; /* Light Green */
+            --high-warn-color: #FFC107;/* Amber */
+            --crit-color: #F44336;     /* Red */
+            --bar-disk: #03A9F4;       /* Light Blue for Disk */
 
-            --info-color: #b5cea8; --dim-color: #888; --font-mono: "DejaVu Sans Mono", "Consolas", "Menlo", monospace;
+            /* Font */
+            --font-mono: "DejaVu Sans Mono", "Consolas", "Menlo", monospace;
         }
-        body { font-family: var(--font-mono); font-size: 13px; line-height: 1.1; padding: 0.3em; background-color: var(--bg-color); color: var(--text-color); margin: 0; overflow-x: hidden; }
-        .container { max-width: 1100px; margin: auto; }
-        a { color: var(--label-color); text-decoration: none; } a:hover { text-decoration: underline; }
 
-        /* Banner Section */
-        .banner { display: flex; justify-content: space-between; align-items: center; padding: 0.3em 0.5em; margin-bottom: 0.5em; background-color: var(--border-color); color: var(--header-color); white-space: nowrap; }
-        .banner-title { font-size: 1.3em; font-weight: bold; text-align: center; flex-grow: 1; }
-        .banner-actions button { padding: 0.2em 0.6em; background-color: #a03030; color: #eee; border: 1px solid var(--crit-color); border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 0.9em; }
-        .banner-actions button:hover { background-color: var(--crit-color); border-color: #ff6666; }
-        .banner-actions button:disabled { background-color: #555; border-color: #777; color: #aaa; cursor: not-allowed; }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 0;
+            padding: 0;
+        }
 
-        /* Header Bar */
-        .header { display: flex; flex-wrap: wrap; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; margin-bottom: 0.5em; white-space: nowrap; }
-        .header-item { margin-right: 1.5em; } .header-label { color: var(--label-color); } .header-value { color: var(--value-color); font-weight: bold; }
+        a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
 
-        /* Main Layout */
-        .main-layout { display: flex; flex-wrap: wrap; gap: 1em; }
-        .column { flex: 1; min-width: 350px; }
+        .container {
+            max-width: 1200px;
+            margin: 10px auto;
+            padding: 0 15px;
+        }
 
-        /* Sections */
-        .section { border: 1px solid var(--border-color); margin-bottom: 1em; background-color: #252526; }
-        .section-title { background-color: var(--border-color); color: var(--header-color); padding: 0.2em 0.5em; font-weight: bold; text-align: center; }
-        .section-content { padding: 0.5em; }
+        .banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .banner h1 {
+            margin: 0;
+            font-size: 1.5em;
+            color: var(--header-color);
+        }
+        .banner-actions button {
+            background-color: var(--crit-color);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .banner-actions button:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+         .banner-actions button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
 
-        /* Definition List */
-        dl { margin: 0; }
-        dt { float: left; width: 12ch; color: var(--label-color); text-align: right; margin-right: 1ch; clear: left; margin-bottom: 0.1em; white-space: nowrap; }
-        dd { margin-left: 13ch; margin-bottom: 0.1em; white-space: nowrap; display: block; }
-        dd.bar-line { margin-bottom: 0.3em; }
 
-        /* CPU Core Layout */
-        .cpu-total-bar { margin-bottom: 0.3em; }
-        .cpu-cores { column-count: 2; column-gap: 1ch; margin-top: 0.3em; }
-        .cpu-core-item { margin-bottom: 0.1em; white-space: nowrap; display: block; }
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 8px;
+            background-color: var(--section-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        .header-item {
+            margin: 0 10px;
+            white-space: nowrap;
+        }
+        .header-label {
+            color: var(--label-color);
+            margin-right: 5px;
+        }
+        .header-value {
+            color: var(--text-color);
+        }
 
-        /* Bars with Text Overlay */
-        .bar-container { display: inline-block; width: 100%; height: 1em; background-color: var(--bar-bg); border: 1px solid #555; vertical-align: middle; position: relative; overflow: hidden; }
-        .bar-fill { display: block; height: 100%; position: absolute; left: 0; top: 0; transition: width 0.3s ease-out; }
-        .bar-text { position: absolute; left: 0; top: 0; width: 100%; height: 100%; font-size: 0.9em; line-height: 1em; color: #fff; text-shadow: 1px 1px 1px rgba(0,0,0,0.7); white-space: nowrap; overflow: hidden; text-overflow: clip; display: flex; justify-content: space-between; align-items: center; padding: 0 5px; }
-        .bar-label { text-align: left; margin-right: 1ch; }
-        .bar-value { text-align: right; font-weight: bold; }
+        .main-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
 
-        /* Bar Colors - Applied to .bar-fill */
-        .bar-fill.ok { background-color: var(--ok-color); }
+        .column {
+            flex: 1;
+            min-width: 300px; /* Prevent columns from becoming too narrow */
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .section {
+            background-color: var(--section-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 10px 15px;
+        }
+
+        .section-title {
+            color: var(--header-color);
+            font-size: 1.1em;
+            margin-top: 0;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Definition List Styling */
+        dl {
+            margin: 0;
+            padding: 0;
+        }
+        dt {
+            color: var(--label-color);
+            width: 90px; /* Fixed width for labels */
+            float: left;
+            clear: left;
+            margin-right: 10px;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        dd {
+            margin-left: 100px; /* dt width + margin */
+            margin-bottom: 3px;
+            white-space: nowrap;
+        }
+        dd:after { /* Clearfix for floats */
+            content: "";
+            display: table;
+            clear: both;
+        }
+
+        /* Table Styling */
+        .io-table, .proc-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed; /* Important for controlling column widths */
+        }
+        .io-table th, .proc-table th {
+            text-align: left;
+            color: var(--label-color);
+            padding: 4px 6px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--table-header-bg);
+            white-space: nowrap;
+        }
+        .io-table td, .proc-table td {
+            padding: 3px 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: top;
+        }
+        /* Specific Column Widths/Alignment */
+        .io-table th:nth-child(1), .io-table td:nth-child(1) { width: 20%; } /* Name */
+        .io-table th:nth-child(2), .io-table td:nth-child(2) { width: 20%; text-align: right; } /* RX Rate / Read Rate / Recv Rate */
+        .io-table th:nth-child(3), .io-table td:nth-child(3) { width: 20%; text-align: right; } /* TX Rate / Write Rate / Sent Rate */
+        .io-table th:nth-child(4), .io-table td:nth-child(4) { width: 20%; text-align: right; } /* RX Total / Read Total */
+        .io-table th:nth-child(5), .io-table td:nth-child(5) { width: 20%; text-align: right; } /* TX Total / Write Total */
+
+        .proc-table th:nth-child(1), .proc-table td:nth-child(1) { width: 10%; text-align: right; } /* PID */
+        .proc-table th:nth-child(2), .proc-table td:nth-child(2) { width: 15%; } /* User */
+        .proc-table th:nth-child(3), .proc-table td:nth-child(3) { width: 10%; text-align: right; } /* CPU% */
+        .proc-table th:nth-child(4), .proc-table td:nth-child(4) { width: 10%; text-align: right; } /* MEM% */
+        .proc-table th:nth-child(5), .proc-table td:nth-child(5) { width: 55%; } /* Name */
+
+        /* Utility Classes */
+        .error { color: var(--crit-color); font-weight: bold; }
+        .info { color: var(--label-color); font-style: italic; }
+        .dim { color: #888; } /* For less important info like totals */
+
+        /* CPU Cores Layout */
+        .cpu-cores {
+            column-count: 2;
+            column-gap: 15px;
+            margin-top: 5px;
+        }
+        .cpu-cores .bar-container { /* Ensure bars don't break across columns */
+             display: inline-block;
+             width: 98%; /* Fit within column */
+             margin-bottom: 3px;
+             break-inside: avoid;
+        }
+
+        /* Overlay Bar Styling */
+        .bar-container {
+            display: inline-block; /* Or block if needed */
+            position: relative;
+            height: 18px; /* Adjust height as needed */
+            background-color: var(--bar-bg);
+            border-radius: 3px;
+            overflow: hidden; /* Clip the fill */
+            vertical-align: middle;
+            margin-bottom: 3px; /* Spacing between bars */
+        }
+        .bar-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            border-radius: 3px 0 0 3px; /* Keep left radius */
+            transition: width 0.3s ease-out; /* Smooth transition */
+        }
+        /* Color classes for bar fill */
+        .bar-fill.ok       { background-color: var(--ok-color); }
         .bar-fill.low-warn { background-color: var(--low-warn-color); }
-        .bar-fill.high-warn { background-color: var(--high-warn-color); }
-        .bar-fill.crit { background-color: var(--crit-color); }
-        .bar-fill.disk { background-color: var(--bar-disk); }
+        .bar-fill.high-warn{ background-color: var(--high-warn-color); }
+        .bar-fill.crit     { background-color: var(--crit-color); }
+        .bar-fill.disk     { background-color: var(--bar-disk); }
 
-        /* IO Tables */
-        .io-table { width: 100%; border-collapse: collapse; margin-top: 0.3em; }
-        .io-table th, .io-table td { text-align: left; padding: 0.1em 0.5em; white-space: nowrap; }
-        .io-table th { color: var(--label-color); border-bottom: 1px solid var(--border-color); font-weight: normal; }
-        .io-table td { color: var(--value-color); }
-        .io-table th.num, .io-table td.num { text-align: right; }
+        .bar-text {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: space-between; /* Push label and value apart */
+            align-items: center;
+            padding: 0 6px;
+            color: #fff; /* White text on colored bars */
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.4); /* Improve readability */
+            white-space: nowrap;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+         .bar-text .label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 5px;
+         }
+         .bar-text .value {
+            flex-shrink: 0; /* Prevent value from shrinking */
+         }
 
-        /* Process Table */
-        .proc-table { width: 100%; border-collapse: collapse; margin-top: 0.3em; table-layout: fixed; }
-        .proc-table th, .proc-table td { text-align: left; padding: 0.1em 0.5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .proc-table th { color: var(--label-color); border-bottom: 1px solid var(--border-color); font-weight: normal; }
-        .proc-table td { color: var(--value-color); }
-        .proc-table th.pid, .proc-table td.pid { width: 6ch; } .proc-table th.user, .proc-table td.user { width: 10ch; }
-        .proc-table th.cpu, .proc-table td.cpu { width: 6ch; text-align: right; } .proc-table th.mem, .proc-table td.mem { width: 6ch; text-align: right; }
-        .proc-table th.name { width: auto; }
-
-        /* Utils */
-        .error { color: var(--crit-color); } .info { color: var(--info-color); } .dim { color: var(--dim-color); }
-
-        /* Jinja2 macro for bar with text overlay */
-        {% macro overlay_bar(percent, width_ch='100%', type='cpu', label='', value_text='') -%}
-            {% set p = percent | float %}
-            {% if type == 'cpu' or type == 'mem' %} {# 4-level colors for CPU/Mem #}
-                {% set color_class = 'crit' if p > 90 else ('high-warn' if p > 75 else ('low-warn' if p > 50 else 'ok')) %}
-            {% else %} {# Simpler for Disk #}
-                 {% set color_class = 'crit' if p > 95 else ('high-warn' if p > 85 else type) %}
-            {% endif %}
-            <span class="bar-container" style="width: {{ width_ch }};"> {# Use ; for style termination #}
-                <span class="bar-fill {{ color_class }}" style="width: {{ p }}%;"></span>
-                <span class="bar-text">
-                    <span class="bar-label">{{ label }}</span>
-                    <span class="bar-value">{{ value_text }}</span>
-                </span>
-            </span>
-        {%- endmacro %}
+         /* Connections List Styling */
+         .connections-list {
+             list-style: none;
+             padding-left: 15px;
+             margin: 5px 0;
+         }
+         .connections-list li {
+             margin-bottom: 2px;
+         }
 
     </style>
 </head>
 <body>
+
+{# --- Jinja2 Macro for Overlay Bar --- #}
+{% macro overlay_bar(percent, width_ch='100%', type='cpu', label='', value_text='') -%}
+{% set p = percent | float if percent != 'N/A' and percent != 'Error' else 0 %}
+{% set color_class = 'ok' %} {# Default color #}
+{% if type == 'cpu' or type == 'mem' %}
+{% if p > 90 %}
+{% set color_class = 'crit' %}
+{% elif p > 75 %}
+{% set color_class = 'high-warn' %}
+{% elif p > 50 %}
+{% set color_class = 'low-warn' %}
+{% else %}
+{% set color_class = 'ok' %}
+{% endif %}
+{% elif type == 'disk' %}
+{% if p > 95 %}
+{% set color_class = 'crit' %}
+{% elif p > 85 %}
+{% set color_class = 'high-warn' %}
+{% else %}
+{% set color_class = 'disk' %} {# Specific color for normal disk usage #}
+{% endif %}
+{% endif %}
+<span class="bar-container" style="width: {{ width_ch }};">
+        <span class="bar-fill {{ color_class }}" style="width: {{ p }}%;"></span>
+        <span class="bar-text">
+            <span class="label">{{ label }}</span>
+            <span class="value">{{ value_text }}</span>
+        </span>
+    </span>
+{%- endmacro %}
+
 <div class="container">
 
-    <!-- Banner -->
     <div class="banner">
-        <span class="banner-title">RPi Monitor :: {{ data.hostname }}</span>
+        <h1>{{ data.hostname }}</h1>
         <div class="banner-actions">
-            <form id="reboot-form" action="{{ url_for('reboot') }}" method="post" onsubmit="return confirm('Are you sure you want to reboot the system?');" style="display: inline;">
-                <button type="submit" {% if not data.is_linux %}disabled title="Reboot only available on Linux"{% endif %}>Reboot</button>
+            <form method="POST" action="{{ url_for('reboot') }}"
+                  onsubmit="return confirm('Are you sure you want to reboot this system?');">
+                <button type="submit"
+                        {% if not data.is_linux %}disabled title="Reboot only available on Linux"{% endif %}>
+                    Reboot System
+                </button>
             </form>
         </div>
     </div>
 
-    <!-- Header -->
     <div class="header">
-        <span class="header-item"><span class="header-label">OS:</span> <span class="header-value">{{ data.os_name }}</span></span>
-        <span class="header-item"><span class="header-label">IP:</span> <span class="header-value">{{ data.ip_address }}</span></span> {# Changed Load to IP #}
-        <span class="header-item"><span class="header-label">Temp:</span> <span class="header-value">{{ data.temperature }}</span></span>
-        <span class="header-item"><span class="header-label">Uptime:</span> <span class="header-value">{{ data.uptime }}</span></span>
+        <span class="header-item"><span class="header-label">OS:</span><span class="header-value">{{ data.os_name }}</span></span>
+        <span class="header-item"><span class="header-label">IP:</span><span class="header-value">{{ data.ip_address }}</span></span>
+        <span class="header-item"><span class="header-label">Temp:</span><span class="header-value">{{ data.temperature }}</span></span>
+        <span class="header-item"><span class="header-label">Uptime:</span><span class="header-value">{{ data.uptime }}</span></span>
     </div>
 
     <div class="main-layout">
         <div class="column">
             <!-- CPU Section -->
             <div class="section">
-                <div class="section-title">CPU</div>
-                <div class="section-content">
-                    <div class="cpu-total-bar">
-                        {# Use 100% width for total bar #}
-                        {{ overlay_bar(data.cpu_total, width_ch='100%', type='cpu', label='Total:', value_text='%.1f%%'|format(data.cpu_total)) }}
-                    </div>
-                    <div class="cpu-cores">
-                        {% for core_percent in data.cpu_cores %}
-                        <div class="cpu-core-item">
-                            {# Use 98% width for core bars to fit columns better #}
-                            {# Removed label from inside core bar #}
-                            {{ overlay_bar(core_percent, width_ch='98%', type='cpu', label='Core %d:'|format(loop.index0), value_text='%.1f%%'|format(core_percent)) }}
-                        </div>
-                        {% endfor %}
-                    </div>
+                <h2 class="section-title">CPU</h2>
+                {% if data.cpu_total == 'Error' %}
+                <p class="error">Error retrieving CPU usage.</p>
+                {% else %}
+                {{ overlay_bar(data.cpu_total, width_ch='100%', type='cpu', label='Total:', value_text=data.cpu_total ~ '%') }}
+                {% if data.cpu_cores %}
+                <div class="cpu-cores">
+                    {% for core_percent in data.cpu_cores %}
+                    {{ overlay_bar(core_percent, width_ch='98%', type='cpu', label='Core ' ~ loop.index0 ~ ':', value_text=core_percent | round(1) ~ '%') }}
+                    {% endfor %}
                 </div>
+                {% else %}
+                <p class="info">Per-core usage not available.</p>
+                {% endif %}
+                {% endif %}
             </div>
 
             <!-- Memory Section -->
             <div class="section">
-                <div class="section-title">Memory</div>
-                <div class="section-content">
-                    {% set mem = data.memory.virtual %}
-                    {% if mem.error %} <p class="metric error"><span class="label">Error:</span> {{ mem.error }}</p>
-                    {% else %}
-                    <dl>
-                        <dt>Total:</dt><dd><span class="value">{{ mem.total }}</span> {{ overlay_bar(mem.percent, width_ch=25, type='mem', label='Mem:', value_text='%.1f%%'|format(mem.percent)) }}</dd>
-                        <dt>Used:</dt><dd><span class="value">{{ mem.used }}</span></dd>
-                        <dt>Free:</dt><dd><span class="value">{{ mem.free }}</span></dd>
-                        {% if data.is_linux %}
-                        <dt>Active:</dt><dd><span class="value">{{ mem.active }}</span></dd>
-                        <dt>Inactive:</dt><dd><span class="value">{{ mem.inactive }}</span></dd>
-                        <dt>Cached:</dt><dd><span class="value">{{ mem.cached }}</span></dd>
-                        <dt>Buffers:</dt><dd><span class="value">{{ mem.buffers }}</span></dd>
-                        {% endif %}
-                    </dl>
+                <h2 class="section-title">Memory</h2>
+                {% if data.memory.virtual.error %}
+                <p class="error">{{ data.memory.virtual.error }}</p>
+                {% else %}
+                <dl>
+                    <dt>Total:</dt><dd>{{ data.memory.virtual.total }} {{ overlay_bar(data.memory.virtual.percent, width_ch='60%', type='mem', value_text=data.memory.virtual.percent ~ '% Used') }}</dd>
+                    <dt>Used:</dt><dd>{{ data.memory.virtual.used }}</dd>
+                    <dt>Free:</dt><dd>{{ data.memory.virtual.free }}</dd>
+                    {% if data.is_linux %}
+                    <dt class="dim">Active:</dt><dd class="dim">{{ data.memory.virtual.active }}</dd>
+                    <dt class="dim">Inactive:</dt><dd class="dim">{{ data.memory.virtual.inactive }}</dd>
+                    <dt class="dim">Cached:</dt><dd class="dim">{{ data.memory.virtual.cached }}</dd>
+                    <dt class="dim">Buffers:</dt><dd class="dim">{{ data.memory.virtual.buffers }}</dd>
+                    {% if data.memory.virtual.shared %} {# Check if shared exists #}
+                    <dt class="dim">Shared:</dt><dd class="dim">{{ data.memory.virtual.shared }}</dd>
                     {% endif %}
-                </div>
+                    {% endif %}
+                </dl>
+                {% endif %}
+                {% if data.memory.swap.total != '0 B' %} {# Only show swap if it exists #}
+                <h3 class="section-title" style="margin-top: 10px; font-size: 1em;">Swap</h3>
+                {% if data.memory.swap.error %}
+                <p class="error">{{ data.memory.swap.error }}</p>
+                {% else %}
+                <dl>
+                    <dt>Total:</dt><dd>{{ data.memory.swap.total }} {{ overlay_bar(data.memory.swap.percent, width_ch='60%', type='mem', value_text=data.memory.swap.percent ~ '% Used') }}</dd>
+                    <dt>Used:</dt><dd>{{ data.memory.swap.used }}</dd>
+                    <dt>Free:</dt><dd>{{ data.memory.swap.free }}</dd>
+                </dl>
+                {% endif %}
+                {% endif %}
             </div>
 
             <!-- Network I/O Section -->
             <div class="section">
-                <div class="section-title">Network I/O (Top 4)</div>
-                <div class="section-content">
-                    {% if data.net_io %}
-                    <table class="io-table">
-                        <thead><tr><th>Interface</th><th class="num">Rx Rate</th><th class="num">Tx Rate</th><th class="num">Rx Total</th><th class="num">Tx Total</th></tr></thead>
-                        <tbody>
-                        {% for nic in data.net_io %}
-                        <tr><td>{{ nic.name }}</td><td class="num">{{ nic.rx_rate }}</td><td class="num">{{ nic.tx_rate }}</td><td class="num">{{ nic.rx_total }}</td><td class="num">{{ nic.tx_total }}</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %} <p class="metric dim"><span class="label">Status:</span> No network interfaces found.</p>
-                    {% endif %}
-                </div>
+                <h2 class="section-title">Network I/O (Top 4)</h2>
+                {% if data.net_io %}
+                <table class="io-table">
+                    <thead>
+                    <tr><th>Interface</th><th>RX Rate</th><th>TX Rate</th><th class="dim">RX Total</th><th class="dim">TX Total</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for iface in data.net_io %}
+                    <tr>
+                        <td>{{ iface.name }}</td>
+                        <td style="text-align: right;">{{ iface.rx_rate }}</td>
+                        <td style="text-align: right;">{{ iface.tx_rate }}</td>
+                        <td class="dim" style="text-align: right;">{{ iface.rx_total }}</td>
+                        <td class="dim" style="text-align: right;">{{ iface.tx_total }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="info">No network interfaces found or error retrieving data.</p>
+                {% endif %}
             </div>
 
             <!-- Service Network I/O Section -->
             <div class="section">
-                <div class="section-title">Service Network I/O</div>
-                <div class="section-content">
-                    {% if data.service_net_io.error %}
-                    <p class="metric error"><span class="label">Error:</span> {{ data.service_net_io.error }}</p>
-                    {% elif data.service_net_io.info %}
-                    <p class="metric dim"><span class="label">Status:</span> {{ data.service_net_io.info }}</p>
-                    {% elif data.service_net_io %}
-                    <table class="io-table">
-                        <thead><tr><th>Service</th><th class="num">Recv Rate</th><th class="num">Sent Rate</th></tr></thead>
-                        <tbody>
-                        {% for service, stats in data.service_net_io.items() %}
-                        <tr><td>{{ service }}</td><td class="num">{{ stats.recv_rate }}</td><td class="num">{{ stats.sent_rate }}</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <p class="metric dim"><span class="label">Status:</span> No service I/O data available.</p>
-                    {% endif %}
-                </div>
+                <h2 class="section-title">Service Network I/O</h2>
+                {% if data.service_net_io.error %}
+                <p class="error">{{ data.service_net_io.error }}</p>
+                {% elif data.service_net_io.info %}
+                <p class="info">{{ data.service_net_io.info }}</p>
+                {% elif data.service_net_io %}
+                <table class="io-table">
+                    <thead>
+                    <tr><th>Service</th><th>Recv Rate</th><th>Sent Rate</th><th></th><th></th></tr> {# Empty headers for alignment #}
+                    </thead>
+                    <tbody>
+                    {% for service, rates in data.service_net_io.items() %}
+                    <tr>
+                        <td>{{ service }}</td>
+                        <td style="text-align: right;">{{ rates.recv_rate }}</td>
+                        <td style="text-align: right;">{{ rates.sent_rate }}</td>
+                        <td></td><td></td> {# Empty cells for alignment #}
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="info">No known service I/O detected.</p> {# Fallback if dict is empty but no error/info #}
+                {% endif %}
             </div>
 
-
-        </div><!-- /column -->
+        </div>{# /column 1 #}
 
         <div class="column">
             <!-- Shares Section -->
             <div class="section">
-                <div class="section-title">Shares <span class="dim">({{ SHARE_BASE_PATH }})</span></div>
-                <div class="section-content">
-                    {% if data.disk_fs %}
-                    {% for disk in data.disk_fs %}
-                    <p class="metric">
-                        {{ overlay_bar(disk.percent, width_ch='98%', type='disk', label='%s:'|format(disk.mountpoint), value_text='%s/%s'|format(disk.used, disk.total)) }}
-                    </p>
-                    {% endfor %}
-                    {% else %} <p class="metric dim"><span class="label">Status:</span> No shared disks found/mounted.</p>
-                    {% endif %}
-                </div>
+                <h2 class="section-title">Shares ({{ SHARE_BASE_PATH if data.is_linux else 'Disks' }})</h2>
+                {% if data.disk_fs %}
+                {% for fs in data.disk_fs %}
+                {% if fs.error %}
+                <p class="error">Error for {{ fs.mountpoint }}: {{ fs.error }}</p>
+                {% else %}
+                {{ overlay_bar(fs.percent, width_ch='100%', type='disk', label=fs.mountpoint ~ ':', value_text=fs.used ~ ' / ' ~ fs.total ~ ' (' ~ fs.percent ~ '%)') }}
+                {% endif %}
+                {% endfor %}
+                {% if not data.disk_fs and data.disk_fs[0].error %} {# Handle case where only error entry exists #}
+                <p class="error">{{ data.disk_fs[0].error }}</p>
+                {% endif %}
+                {% else %}
+                <p class="info">No relevant shares/filesystems found{% if data.is_linux %} under {{ SHARE_BASE_PATH }}{% endif %}.</p>
+                {% endif %}
             </div>
 
             <!-- Disk I/O Section -->
             <div class="section">
-                <div class="section-title">Disk I/O</div>
-                <div class="section-content">
-                    {% if data.disk_io %}
-                    <table class="io-table">
-                        <thead><tr><th>Disk</th><th class="num">Read Rate</th><th class="num">Write Rate</th><th class="num">Read Total</th><th class="num">Write Total</th></tr></thead>
-                        <tbody>
-                        {% for disk, stats in data.disk_io.items() %}
-                        <tr><td>{{ disk }}</td><td class="num">{{ stats.read_rate }}</td><td class="num">{{ stats.write_rate }}</td><td class="num">{{ stats.read_total }}</td><td class="num">{{ stats.write_total }}</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %} <p class="metric dim"><span class="label">Status:</span> No physical disks found for I/O.</p>
-                    {% endif %}
-                </div>
+                <h2 class="section-title">Disk I/O</h2>
+                {% if data.disk_io %}
+                <table class="io-table">
+                    <thead>
+                    <tr><th>Device</th><th>Read Rate</th><th>Write Rate</th><th class="dim">Read Total</th><th class="dim">Write Total</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for disk, io in data.disk_io.items()|sort %} {# Sort by disk name #}
+                    <tr>
+                        <td>{{ disk }}</td>
+                        <td style="text-align: right;">{{ io.read_rate }}</td>
+                        <td style="text-align: right;">{{ io.write_rate }}</td>
+                        <td class="dim" style="text-align: right;">{{ io.read_total }}</td>
+                        <td class="dim" style="text-align: right;">{{ io.write_total }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="info">No disk I/O data available or error retrieving data.</p>
+                {% endif %}
             </div>
 
             <!-- Connections Section -->
             <div class="section">
-                <div class="section-title">Connections</div>
-                <div class="section-content">
-                    <dl>
-                        <dt>VPN Type:</dt><dd>{{ data.connections.type }}</dd>
+                <h2 class="section-title">Connections</h2>
+                {% if data.connections.error %}
+                <p class="error">{{ data.connections.error }}</p>
+                {% endif %}
+                <dl>
+                    <dt>VPN Type:</dt><dd>{{ data.connections.type }}</dd>
+                    <dt>VPN Peers:</dt>
+                    <dd>
                         {% if data.connections.peers %}
-                        <dt>VPN Peers:</dt>
-                        <dd><ul class="conn-list">{% for peer in data.connections.peers %}<li><span class="info">{{ peer }}</span></li>{% endfor %}</ul></dd>
-                        {% elif data.connections.type != 'None' %}
-                        <dt>VPN Peers:</dt><dd><span class="dim">None detected or service inactive.</span></dd>
-                        {% endif %}
-                        {% if data.connections.smb_clients %}
-                        <dt>SMB Clients:</dt>
-                        <dd><ul class="conn-list">{% for client in data.connections.smb_clients %}<li><span class="info">{{ client }}</span></li>{% endfor %}</ul></dd>
+                        <ul class="connections-list">
+                            {% for peer in data.connections.peers %}
+                            <li>{{ peer }}</li>
+                            {% endfor %}
+                        </ul>
                         {% else %}
-                        <dt>SMB Clients:</dt><dd><span class="dim">No active clients detected.</span></dd>
+                        <span class="info">None detected.</span>
                         {% endif %}
-                        {% if data.connections.error %}
-                        <dt class="error">Error:</dt><dd class="error">{{ data.connections.error }}</dd>
+                    </dd>
+                    <dt>SMB Clients:</dt>
+                    <dd>
+                        {% if data.connections.smb_clients %}
+                        <ul class="connections-list">
+                            {% for client in data.connections.smb_clients %}
+                            <li>{{ client }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <span class="info">None detected{% if not data.is_linux %} (Linux only){% endif %}.</span>
                         {% endif %}
-                    </dl>
-                </div>
+                    </dd>
+                </dl>
             </div>
 
             <!-- Top Processes Section -->
             <div class="section">
-                <div class="section-title">Top Processes (by MEM)</div>
-                <div class="section-content">
-                    {% if data.top_procs %}
-                    <table class="proc-table">
-                        <thead><tr><th class="pid">PID</th><th class="user">USER</th><th class="cpu">CPU%</th><th class="mem">MEM%</th><th class="name">NAME</th></tr></thead>
-                        <tbody>
-                        {% for proc in data.top_procs %}
-                        <tr>
-                            <td class="pid">{{ proc.pid }}</td><td class="user">{{ proc.user }}</td>
-                            <td class="cpu">{{ "%.1f"|format(proc.cpu) }}</td><td class="mem">{{ "%.1f"|format(proc.mem) }}</td>
-                            <td class="name" title="{{ proc.name }}">{{ proc.name }}</td>
-                        </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %} <p class="metric dim"><span class="label">Status:</span> Could not retrieve process list.</p>
-                    {% endif %}
-                </div>
+                <h2 class="section-title">Top Processes (by MEM)</h2>
+                {% if data.top_procs %}
+                {% if data.top_procs[0].error %} {# Check if the list contains an error indicator #}
+                <p class="error">{{ data.top_procs[0].error }}</p>
+                {% else %}
+                <table class="proc-table">
+                    <thead>
+                    <tr><th>PID</th><th>User</th><th>CPU%</th><th>MEM%</th><th>Name</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for proc in data.top_procs %}
+                    <tr>
+                        <td style="text-align: right;">{{ proc.pid }}</td>
+                        <td>{{ proc.username | default('N/A', true) }}</td>
+                        <td style="text-align: right;">{{ proc.cpu_percent | round(1) }}</td>
+                        <td style="text-align: right;">{{ proc.memory_percent | round(1) }}</td>
+                        <td title="{{ proc.name }}">{{ proc.name }}</td> {# Use title for full name on hover #}
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+                {% else %}
+                <p class="info">No process data available or error retrieving data.</p>
+                {% endif %}
             </div>
 
-        </div><!-- /column -->
-    </div><!-- /main-layout -->
+        </div> {# /column 2 #}
+    </div> {# /main-layout #}
 
-</div><!-- /container -->
+</div> {# /container #}
+
 </body>
 </html>
