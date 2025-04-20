@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPi Monitor</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.4; padding: 1em; max-width: 800px; margin: auto; background-color: #f8f8f8; }
+        h1, h2 { color: #333; border-bottom: 1px solid #ccc; padding-bottom: 0.3em; }
+        .metric { margin-bottom: 1em; background-color: #fff; padding: 1em; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .metric strong { display: inline-block; min-width: 100px; }
+        .progress-bar { background-color: #e9ecef; border-radius: .25rem; height: 1rem; overflow: hidden; margin-top: 0.3em; margin-bottom: 0.5em;}
+        .progress-bar-inner { background-color: #007bff; height: 100%; text-align: center; color: white; font-size: 0.8em; line-height: 1rem; transition: width 0.6s ease; }
+        ul { padding-left: 20px; margin-top: 0.5em;}
+        li { margin-bottom: 0.5em; }
+        button { padding: 0.5em 1em; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #c82333; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+<h1>Raspberry Pi Status</h1>
+
+<div class="metric">
+    <h2>System</h2>
+    <p><strong>Uptime:</strong> {{ data.uptime }}</p>
+    <p><strong>CPU Usage:</strong> {{ data.cpu_percent }}%</p>
+    <div class="progress-bar"><div class="progress-bar-inner" style="width: {{ data.cpu_percent }}%;"></div></div>
+    <p><strong>RAM Usage:</strong> {{ data.ram_percent }}%</p>
+    <div class="progress-bar"><div class="progress-bar-inner" style="width: {{ data.ram_percent }}%;"></div></div>
+</div>
+
+<div class="metric">
+    <h2>Mounted Shares ({{ SHARE_BASE_PATH }})</h2>
+    {% if data.disks %}
+    <ul>
+        {% for disk in data.disks %}
+        <li>
+            <strong>{{ disk.mountpoint }}:</strong>
+            {% if disk.error %}
+            <span style="color: red;">{{ disk.error }}</span>
+            {% else %}
+            {{ disk.used }} / {{ disk.total }} ({{ disk.percent }}%)
+            <div class="progress-bar"><div class="progress-bar-inner" style="width: {{ disk.percent }}%;"></div></div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No shared disks found or mounted under {{ SHARE_BASE_PATH }}.</p>
+    {% endif %}
+</div>
+
+<div class="metric">
+    <h2>Connections</h2>
+    <p><strong>VPN Type:</strong> {{ data.connections.type }}</p>
+    {% if data.connections.peers %}
+    <p><strong>VPN Peers:</strong></p>
+    <ul>
+        {% for peer in data.connections.peers %}
+        <li>{{ peer }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p><em>No VPN peers detected or VPN disabled.</em></p>
+    {% endif %}
+    {% if data.connections.smb_clients %}
+    <p><strong>SMB Clients:</strong></p>
+    <ul>
+        {% for client in data.connections.smb_clients %}
+        <li>{{ client }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p><em>No active SMB clients detected.</em></p>
+    {% endif %}
+    {% if data.connections.error %}
+    <p style="color: red;">Error checking connections: {{ data.connections.error }}</p>
+    {% endif %}
+</div>
+
+<div class="metric">
+    <h2>Actions</h2>
+    <form id="reboot-form" action="{{ url_for('reboot') }}" method="post" onsubmit="return confirm('Are you sure you want to reboot the system?');">
+        <button type="submit" {% if not data.is_linux %}disabled title="Reboot only available on Linux"{% endif %}>Reboot System</button>
+    </form>
+</div>
+
+</body>
+</html>
