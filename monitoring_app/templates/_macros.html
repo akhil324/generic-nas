@@ -1,0 +1,22 @@
+{# templates/_macros.html #}
+{% macro overlay_bar(percent, width_ch='100%', type='cpu', label='', value_text='') -%}
+{% set p = percent | float if percent != 'N/A' and percent != 'Error' else 0 %}
+{% set color_class = 'ok' %} {# Default color #}
+{% if type == 'cpu' or type == 'mem' %}
+{% if p > 90 %} {% set color_class = 'crit' %}
+{% elif p > 75 %} {% set color_class = 'high-warn' %}
+{% elif p > 50 %} {% set color_class = 'low-warn' %}
+{% else %} {% set color_class = 'ok' %} {% endif %}
+{% elif type == 'disk' %}
+{% if p > 95 %} {% set color_class = 'crit' %}
+{% elif p > 85 %} {% set color_class = 'high-warn' %}
+{% else %} {% set color_class = 'disk' %} {% endif %}
+{% endif %}
+<span class="bar-container" style="width: {{ width_ch }};">
+        <span class="bar-fill {{ color_class }}" style="width: {{ p }}%;"></span>
+        <span class="bar-text">
+            <span class="label">{{ label }}</span>
+            <span class="value">{{ value_text }}</span>
+        </span>
+    </span>
+{%- endmacro %}

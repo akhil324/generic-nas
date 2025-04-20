@@ -1,0 +1,16 @@
+{# templates/partials/_cpu.html #}
+<div class="section">
+    <h2 class="section-title">CPU</h2>
+    {% if data.cpu_total == 'Error' %} <p class="error">Error retrieving CPU usage.</p>
+    {% else %}
+    {{ overlay_bar(data.cpu_total, width_ch='100%', type='cpu', label='Total:', value_text=data.cpu_total ~ '%') }}
+    {% if data.cpu_cores %}
+    <div class="cpu-cores">
+        {% for core_percent in data.cpu_cores %}
+        {{ overlay_bar(core_percent, width_ch='98%', type='cpu', label='Core ' ~ loop.index0 ~ ':',
+        value_text=core_percent | round(1) ~ '%') }}
+        {% endfor %}
+    </div>
+    {% else %} <p class="info">Per-core usage not available.</p> {% endif %}
+    {% endif %}
+</div>

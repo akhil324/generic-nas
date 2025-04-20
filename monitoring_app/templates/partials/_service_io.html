@@ -1,0 +1,30 @@
+{# templates/partials/_service_io.html #}
+<div class="section">
+    <h2 class="section-title">Service Network I/O</h2>
+    {% if data.service_net_io.error %} <p class="error">{{ data.service_net_io.error }}</p>
+    {% elif data.service_net_io.info %} <p class="info">{{ data.service_net_io.info }}</p>
+    {% elif data.service_net_io %}
+    <table class="io-table service-io-table">
+        <thead>
+        <tr>
+            <th>Service</th>
+            <th>Recv Rate</th>
+            <th>Sent Rate</th>
+            <th></th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for service, rates in data.service_net_io.items()|sort %}
+        <tr>
+            <td>{{ service }}</td>
+            <td style="text-align: right;">{{ rates.recv_rate }}</td>
+            <td style="text-align: right;">{{ rates.sent_rate }}</td>
+            <td></td>
+            <td></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %} <p class="info">No known service I/O detected.</p> {% endif %}
+</div>
