@@ -179,7 +179,7 @@ SCRIPT_DIR=$(dirname "$(realpath "$0")") # Get directory where this script resid
 if [[ ! -f "${SCRIPT_DIR}/firstrun.sh" || \
       ! -d "${SCRIPT_DIR}/setup_scripts" || \
       ! -d "${SCRIPT_DIR}/monitoring_app" || \
-      ! -f "${SCRIPT_DIR}/99-share-automount.rules" ]]; then
+      ! -f "${SCRIPT_DIR}/udev_rules/99-share-automount.rules" ]]; then
     error "One or more required source files/directories (firstrun.sh, setup_scripts/, monitoring_app/, 99-share-automount.rules) not found in script directory: $SCRIPT_DIR"
 fi
 
