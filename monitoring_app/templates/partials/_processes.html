@@ -1,0 +1,33 @@
+{# templates/partials/_processes.html #}
+<div class="section">
+    <h2 class="section-title">Top Processes (by MEM %)</h2>
+    {% if data.top_procs %}
+    {% if data.top_procs[0].error %} <p class="error">{{ data.top_procs[0].error }}</p>
+    {% else %}
+    <table class="proc-table">
+        <thead>
+        <tr>
+            <th>PID</th>
+            <th>User</th>
+            <th>CPU%</th>
+            <th>MEM%</th>
+            <th>Memory</th>
+            <th>Name</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for proc in data.top_procs %}
+        <tr>
+            <td>{{ proc.pid }}</td>
+            <td>{{ proc.username | default('N/A', true) }}</td>
+            <td style="text-align: right;">{{ proc.cpu_percent | round(1) }}</td>
+            <td style="text-align: right;">{{ proc.memory_percent | round(1) }}</td>
+            <td style="text-align: right;">{{ proc.memory_rss_human }}</td>
+            <td title="{{ proc.name }}">{{ proc.name }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% else %} <p class="info">No process data available.</p> {% endif %}
+</div>

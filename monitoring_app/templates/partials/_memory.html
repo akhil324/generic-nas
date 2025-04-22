@@ -1,0 +1,72 @@
+{# templates/partials/_memory.html #}
+<div class="section">
+    <h2 class="section-title">Memory</h2>
+    {% if data.memory.virtual.error %}
+    <p class="error">{{ data.memory.virtual.error }}</p>
+    {% else %}
+    <dl>
+        {# Total and the usage bar #}
+        <dt>Total:</dt>
+        <dd>{{ data.memory.virtual.total }} {{ overlay_bar(data.memory.virtual.percent, width_ch='60%', type='mem',
+            value_text=data.memory.virtual.percent ~ '% Used') }}
+        </dd>
+
+        {# Combined Used / Available line #}
+        <dt>Used:</dt>
+        <dd>
+            {{ data.memory.virtual.used }}
+            <span style="margin: 0 8px;">/</span> {# Separator #}
+            <span style="color: var(--ok-color);">Available: {{ data.memory.virtual.available }}</span> {# Available
+            value with label and color #}
+        </dd>
+
+        {# Free line removed #}
+        {#
+        <dt class="dim">Free:</dt>
+        <dd class="dim">{{ data.memory.virtual.free }}</dd>
+        #}
+
+        {# Linux Specific Breakdown - Show Buffers/Cache #}
+        {% if data.is_linux %}
+        <dt class="dim">Buffers:</dt>
+        <dd class="dim">{{ data.memory.virtual.buffers }}</dd>
+        <dt class="dim">Cached:</dt>
+        <dd class="dim">{{ data.memory.virtual.cached }}</dd>
+        {# Optional: Keep Active/Inactive/Shared if you find them useful #}
+        {#
+        <dt class="dim">Active:</dt>
+        <dd class="dim">{{ data.memory.virtual.active }}</dd>
+        #}
+        {#
+        <dt class="dim">Inactive:</dt>
+        <dd class="dim">{{ data.memory.virtual.inactive }}</dd>
+        #}
+        {# {% if data.memory.virtual.shared %}
+        <dt class="dim">Shared:</dt>
+        <dd class="dim">{{ data.memory.virtual.shared }}</dd>
+        {% endif %} #}
+        {% endif %}
+    </dl>
+    {% endif %}
+
+    {# --- Swap Section (No Changes) --- #}
+    {% if data.memory.swap.total != '0 B' %}
+    <h3 class="section-title" style="margin-top: 10px; font-size: 1em;">Swap</h3>
+    {% if data.memory.swap.error %} <p class="error">{{ data.memory.swap.error }}</p>
+    {% else %}
+    <dl>
+        <dt>Total:</dt>
+        <dd>{{ data.memory.swap.total }} {{ overlay_bar(data.memory.swap.percent, width_ch='60%', type='mem',
+            value_text=data.memory.swap.percent ~ '% Used') }}
+        </dd>
+        <dt>Used:</dt>
+        <dd>{{ data.memory.swap.used }}</dd>
+        {# Free line removed from Swap as well for consistency, if desired #}
+        {#
+        <dt>Free:</dt>
+        <dd>{{ data.memory.swap.free }}</dd>
+        #}
+    </dl>
+    {% endif %}
+    {% endif %}
+</div>

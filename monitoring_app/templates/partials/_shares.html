@@ -1,0 +1,18 @@
+{# templates/partials/_shares.html #}
+<div class="section">
+    {# The title is passed from the Flask route context #}
+    <h2 class="section-title">{{ shares_title }}</h2>
+    {% if data.disk_fs and not data.disk_fs[0].error %}
+    {% for fs in data.disk_fs %}
+    {% if fs.error %} <p class="error">Error for {{ fs.mountpoint }}: {{ fs.error }}</p>
+    {% else %}
+    {{ overlay_bar(fs.percent, width_ch='100%', type='disk', label=fs.mountpoint ~ ':', value_text=fs.used ~ ' / ' ~
+    fs.total ~ ' (' ~ fs.percent ~ '%)') }}
+    {% endif %}
+    {% endfor %}
+    {% elif data.disk_fs and data.disk_fs[0].error %}
+    <p class="error">{{ data.disk_fs[0].error }}</p>
+    {% else %}
+    <p class="info">No disks found matching filter criteria.</p>
+    {% endif %}
+</div>

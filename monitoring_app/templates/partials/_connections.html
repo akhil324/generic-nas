@@ -1,0 +1,32 @@
+{# templates/partials/_connections.html #}
+<div class="section">
+    <h2 class="section-title">Connections</h2>
+    {% if data.connections.error %} <p class="error">{{ data.connections.error }}</p> {% endif %}
+    <dl>
+        <dt>VPN Type:</dt>
+        <dd>{{ data.connections.type }}</dd>
+        <dt>VPN Peers:</dt>
+        <dd>
+            {% if data.connections.peers and not ('No ' in data.connections.peers[0] or 'service not active' in
+            data.connections.peers[0] or 'Failed to get' in data.connections.peers[0]) %}
+            <ul class="connections-list"> {% for peer in data.connections.peers %}
+                <li>{{ peer }}</li>
+                {% endfor %}
+            </ul>
+            {% elif data.connections.peers %} <span class="info">{{ data.connections.peers[0] }}</span>
+            {% else %} <span class="info">None detected.</span> {% endif %}
+        </dd>
+        <dt>SMB Clients:</dt>
+        <dd>
+            {% if data.connections.smb_clients and not ('No ' in data.connections.smb_clients[0] or 'Error parsing' in
+            data.connections.smb_clients[0] or 'command failed' in data.connections.smb_clients[0]) %}
+            <ul class="connections-list"> {% for client in data.connections.smb_clients %}
+                <li>{{ client }}</li>
+                {% endfor %}
+            </ul>
+            {% elif data.connections.smb_clients %} <span class="info">{{ data.connections.smb_clients[0] }}</span>
+            {% else %} <span class="info">None detected{% if not data.is_linux %} (Linux only){% endif %}.</span> {%
+            endif %}
+        </dd>
+    </dl>
+</div>

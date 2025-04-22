@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5">
+    {# Link the external CSS #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>System Monitor - {% block title %}{{ data.hostname }}{% endblock %}</title>
+</head>
+<body>
+<div class="container">
+
+    {# --- Banner --- #}
+    <div class="banner">
+        <h1>{{ data.hostname }}</h1>
+        <div class="banner-actions">
+            <form method="POST" action="{{ url_for('reboot') }}"
+                  onsubmit="return confirm('Are you sure you want to reboot this system?');">
+                <button type="submit"
+                        {% if not data.is_linux %}disabled title="Reboot only available on Linux" {% endif %}>
+                    Reboot System
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {# --- Header --- #}
+    <div class="header">
+        <span class="header-item"><span class="header-label">OS:</span><span
+                class="header-value">{{ data.os_name }}</span></span>
+        <span class="header-item"><span class="header-label">LAN IP:</span><span class="header-value">{{ data.ip_address }}</span></span>
+        <span class="header-item"><span class="header-label">Temp:</span><span class="header-value">{{ data.temperature }}</span></span>
+        <span class="header-item"><span class="header-label">Uptime:</span><span
+                class="header-value">{{ data.uptime }}</span></span>
+    </div>
+
+    {# --- Main Content Block --- #}
+    <div class="main-layout">
+        {% block content %}
+        {# Content from inheriting templates will go here #}
+        {% endblock %}
+    </div>
+
+</div>
+{# /container #}
+</body>
+</html>

@@ -1,0 +1,28 @@
+{# templates/partials/_disk_io.html #}
+<div class="section">
+    <h2 class="section-title">Disk I/O</h2>
+    {% if data.disk_io %}
+    <table class="io-table">
+        <thead>
+        <tr>
+            <th>Device</th>
+            <th>Read Rate</th>
+            <th>Write Rate</th>
+            <th class="dim">Read Total</th>
+            <th class="dim">Write Total</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for disk, io in data.disk_io.items()|sort %}
+        <tr>
+            <td>{{ disk }}</td>
+            <td style="text-align: right;">{{ io.read_rate }}</td>
+            <td style="text-align: right;">{{ io.write_rate }}</td>
+            <td class="dim" style="text-align: right;">{{ io.read_total }}</td>
+            <td class="dim" style="text-align: right;">{{ io.write_total }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %} <p class="info">No disk I/O data available.</p> {% endif %}
+</div>
