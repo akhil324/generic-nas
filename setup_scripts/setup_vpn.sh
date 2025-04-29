@@ -57,6 +57,9 @@ case "$VPN_PROVIDER" in
     # Use the official install script
     curl -fsSL https://tailscale.com/install.sh | sh || error "Tailscale installation script failed."
 
+    log "Enabling and starting Tailscale service..."
+    systemctl enable --now tailscaled || error "Failed to enable/start tailscaled service."
+
     log "Configuring Tailscale..."
     TAILSCALE_UP_CMD="tailscale up --authkey=${TAILSCALE_AUTH_KEY} --accept-routes" # Accept routes by default for NAS access
     if [[ -n "$TAILSCALE_HOSTNAME" ]]; then
@@ -66,9 +69,6 @@ case "$VPN_PROVIDER" in
 
     # Run the command
     eval "$TAILSCALE_UP_CMD" || error "tailscale up command failed."
-
-    log "Enabling and starting Tailscale service..."
-    systemctl enable --now tailscaled || error "Failed to enable/start tailscaled service."
 
     log "Tailscale setup completed successfully."
     log "NOTE: Check your Tailscale Admin Console to ensure the device appears and is authorized."

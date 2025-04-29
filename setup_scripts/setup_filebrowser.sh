@@ -56,79 +56,99 @@ fi
 if ! [[ "$FILEBROWSER_PORT" =~ ^[0-9]+$ ]] || [[ "$FILEBROWSER_PORT" -lt 1 ]] || [[ "$FILEBROWSER_PORT" -gt 65535 ]]; then
     error "Invalid FILEBROWSER_PORT specified: $FILEBROWSER_PORT"
 fi
-if [[ ! -d "$FILEBROWSER_BASE_DIR" ]]; then
-    warn "FILEBROWSER_BASE_DIR '$FILEBROWSER_BASE_DIR' does not exist. Attempting to create."
-    mkdir -p "$FILEBROWSER_BASE_DIR" || error "Failed to create FILEBROWSER_BASE_DIR."
-fi
-
+# Base directory existence checked later
 
 # --- Install Dependencies ---
-log "Checking for necessary tools (curl, tar)..."
-if ! command -v curl &> /dev/null || ! command -v tar &> /dev/null; then
-    log "Installing curl and tar..."
+log "Checking for necessary tools (curl, tar, jq)..."
+if ! command -v curl &> /dev/null || ! command -v tar &> /dev/null || ! command -v jq &> /dev/null; then
+    log "Installing curl, tar, jq..."
     apt-get update || warn "apt-get update failed"
-    apt-get install -y curl tar || error "Failed to install curl or tar."
+    apt-get install -y curl tar jq || error "Failed to install curl, tar, or jq."
 fi
 
 # --- Download and Install File Browser ---
 if [[ -f "$FILEBROWSER_BIN_PATH" ]]; then
     log "File Browser binary already exists at $FILEBROWSER_BIN_PATH. Skipping download."
-    # Optionally add version check here later if needed
 else
     log "Downloading File Browser binary for linux-arm64..."
-    # Fetch the latest release URL from GitHub API
-    LATEST_URL=$(curl -s https://api.github.com/repos/filebrowser/filebrowser/releases/latest | grep browser_download_url.*linux-arm64\.tar\.gz | cut -d '"' -f 4)
+    log "Fetching latest release URL from GitHub API..."
+    LATEST_URL=$(curl -s https://api.github.com/repos/filebrowser/filebrowser/releases/latest | jq -r '.assets[] | select(.name | endswith("linux-arm64-filebrowser.tar.gz")) | .browser_download_url')
 
-    if [[ -z "$LATEST_URL" ]]; then
-        error "Could not determine latest File Browser download URL for linux-arm64."
+    if [[ -z "$LATEST_URL" || "$LATEST_URL" == "null" ]]; then
+        error "Could not determine latest File Browser download URL for linux-arm64 using jq."
+        exit 1
     fi
 
     log "Latest download URL: $LATEST_URL"
     TEMP_DIR=$(mktemp -d)
     log "Downloading to $TEMP_DIR/filebrowser.tar.gz"
-    curl -L "$LATEST_URL" -o "$TEMP_DIR/filebrowser.tar.gz" || error "Download failed."
+    if ! curl -L "$LATEST_URL" -o "$TEMP_DIR/filebrowser.tar.gz"; then
+        error "Download failed from $LATEST_URL."
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
 
     log "Extracting File Browser..."
-    tar -xzf "$TEMP_DIR/filebrowser.tar.gz" -C "$TEMP_DIR" filebrowser || error "Extraction failed."
+    if ! tar -xzf "$TEMP_DIR/filebrowser.tar.gz" -C "$TEMP_DIR" filebrowser; then
+         error "Extraction failed for $TEMP_DIR/filebrowser.tar.gz."
+         rm -rf "$TEMP_DIR"
+         exit 1
+    fi
 
     log "Installing File Browser binary to $FILEBROWSER_BIN_PATH..."
-    mv "$TEMP_DIR/filebrowser" "$FILEBROWSER_BIN_PATH" || error "Failed to move binary."
-    chmod +x "$FILEBROWSER_BIN_PATH" || error "Failed to make binary executable."
+    mv "$TEMP_DIR/filebrowser" "$FILEBROWSER_BIN_PATH" || { error "Failed to move binary."; rm -rf "$TEMP_DIR"; exit 1; }
+    chmod +x "$FILEBROWSER_BIN_PATH" || { error "Failed to make binary executable."; rm -rf "$TEMP_DIR"; exit 1; }
 
     log "Cleaning up temporary download files..."
     rm -rf "$TEMP_DIR"
 fi
 
-# --- Create Configuration Directory and Database Parent ---
+# --- Create Configuration/Database Directory ---
 log "Ensuring File Browser config directory exists: $(dirname "$FILEBROWSER_DB_PATH")"
 mkdir -p "$(dirname "$FILEBROWSER_DB_PATH")" || error "Failed to create directory for File Browser database."
+"$FILEBROWSER_BIN_PATH" config init -d "$FILEBROWSER_DB_PATH"
 
-# --- Configure File Browser (Initial User Setup) ---
-# File Browser can initialize its database and add users via command line.
-# We run this once to set up the initial user. If the DB exists, it might update the password.
-log "Configuring initial File Browser user: $FILEBROWSER_USER"
-# Note: The '--database' flag ensures it uses our specified location.
-"$FILEBROWSER_BIN_PATH" users add "$FILEBROWSER_USER" "$FILEBROWSER_PASSWORD" --perm.admin --database "$FILEBROWSER_DB_PATH" || error "Failed to add/configure File Browser user."
-log "Initial user configured."
+# --- Configure File Browser User ---
+# The 'users add' command should initialize the DB if it doesn't exist.
+log "Configuring File Browser user: $FILEBROWSER_USER"
+# Run users add command
+"$FILEBROWSER_BIN_PATH" users add "$FILEBROWSER_USER" "$FILEBROWSER_PASSWORD" --perm.admin --database "$FILEBROWSER_DB_PATH" || error "Failed to add/configure File Browser user '$FILEBROWSER_USER'."
+
+# --- Verification Step ---
+log "Verifying user '$FILEBROWSER_USER' exists in database..."
+if ! "$FILEBROWSER_BIN_PATH" users ls --database "$FILEBROWSER_DB_PATH" | grep -q " $FILEBROWSER_USER "; then
+    error "Verification failed: User '$FILEBROWSER_USER' not found in database after add command."
+    # Optional: Dump user list for debugging
+    # "$FILEBROWSER_BIN_PATH" users ls --database "$FILEBROWSER_DB_PATH"
+    exit 1
+fi
+log "User '$FILEBROWSER_USER' verified successfully."
+
+# --- Ensure Base Directory Exists ---
+log "Ensuring File Browser base directory exists: $FILEBROWSER_BASE_DIR"
+mkdir -p "$FILEBROWSER_BASE_DIR" || error "Failed to create File Browser base directory: $FILEBROWSER_BASE_DIR"
 
 # --- Create systemd Service File ---
 log "Creating systemd service file: $FILEBROWSER_SERVICE_FILE"
 cat << EOF > "$FILEBROWSER_SERVICE_FILE"
 [Unit]
 Description=File Browser Web UI
+# Make sure storage is mounted before starting (if base dir is on external storage)
+# Consider adding RequiresMountsFor=/mnt/shares (or variable) if needed
 After=network.target
 
 [Service]
-User=root # Run as root to access all files in base dir, consider a dedicated user later if needed
+# Running as root is simpler for now, but consider a dedicated user later
+User=root
 Group=root
-WorkingDirectory=/ # Or maybe FILEBROWSER_BASE_DIR? Check Filebrowser docs.
+# Setting WorkingDirectory might be safer than relying on default '/'
+WorkingDirectory=$FILEBROWSER_BASE_DIR
 ExecStart=$FILEBROWSER_BIN_PATH \\
     --address 0.0.0.0 \\
     --port $FILEBROWSER_PORT \\
     --database "$FILEBROWSER_DB_PATH" \\
     --root "$FILEBROWSER_BASE_DIR" \\
     --log stdout
-# Add other flags as needed, e.g., --no-auth if desired (not recommended)
 Restart=on-failure
 RestartSec=5
 
@@ -145,10 +165,18 @@ log "Reloading systemd daemon..."
 systemctl daemon-reload || warn "systemctl daemon-reload failed."
 
 log "Enabling and starting File Browser service..."
+# Stop it first in case a previous failed attempt left it in a weird state
+systemctl stop filebrowser.service || true # Ignore error if not running
 systemctl enable --now filebrowser.service || error "Failed to enable or start filebrowser.service."
 
+# Add a small delay and final check
+sleep 2
+log "Final check of service status:"
+systemctl status filebrowser.service --no-pager || log "Service status check reported an issue."
+
+
 log "File Browser setup completed successfully."
-log "Access the UI at: http://<your-pi-ip-or-zerotier-ip>:$FILEBROWSER_PORT"
+log "Access the UI at: http://<container-ip-or-localhost>:$FILEBROWSER_PORT"
 log "Login with user '$FILEBROWSER_USER' and the password from your .env file."
 
 exit 0

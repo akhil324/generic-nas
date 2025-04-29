@@ -1,0 +1,110 @@
+# Use an official Debian 12 (Bookworm) ARM64 base image
+FROM debian:bookworm-slim
+
+# --- Environment Variables ---
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TERM=xterm
+# POC_HOSTNAME: Hostname for the test container itself
+ENV POC_HOSTNAME=testrpi
+# POC_USERNAME: User for accessing the Docker test environment via SSH
+ENV POC_USERNAME=gnas
+# POC_PASSWORD: Password for the initial SSH user (gnas) in Docker env
+ENV POC_PASSWORD=zxcvbnm@324
+# POC_TIMEZONE: Use UTC for test environment consistency
+ENV POC_TIMEZONE=UTC
+
+# --- System Setup & Core Dependencies ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Essential for running systemd in container
+    systemd \
+    systemd-sysv \
+    # Basic utilities & SSH access
+    nano \
+    sudo \
+    openssh-server \
+    procps \
+    ca-certificates \
+    # Common dependencies for setup scripts
+    curl \
+    gnupg \
+    apt-transport-https \
+    # User creation tools
+    passwd \
+    # Dependencies for manage_storage.sh
+    samba \
+    util-linux \
+    dosfstools \
+    exfatprogs \
+    ntfs-3g \
+    # Dependencies for setup_filebrowser.sh
+    tar \
+    jq \
+    # Dependencies for setup_monitoring.sh
+    python3 \
+    python3-pip \
+    python3-venv \
+    build-essential \
+    # Dependency for firstrun.sh network check
+    iputils-ping \
+    && \
+    # Clean up apt cache
+    rm -rf /var/lib/apt/lists/*
+
+# --- Configure Timezone ---
+RUN ln -snf /usr/share/zoneinfo/${POC_TIMEZONE} /etc/localtime && \
+    echo "${POC_TIMEZONE}" > /etc/timezone
+
+# --- Configure Hostname ---
+RUN echo "${POC_HOSTNAME}" > /etc/hostname
+
+# --- Create SSH User, Set Password, Grant Sudo ---
+# This user is primarily for accessing the Docker test environment via SSH
+RUN \
+    useradd -m -s /bin/bash "${POC_USERNAME}" && \
+    # Use chpasswd to set the password provided by the ENV variable
+    echo "${POC_USERNAME}:${POC_PASSWORD}" | chpasswd && \
+    adduser "${POC_USERNAME}" sudo && \
+    # Grant passwordless sudo rights to this user within the container
+    echo "${POC_USERNAME} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/90-${POC_USERNAME} && \
+    chmod 0440 /etc/sudoers.d/90-${POC_USERNAME}
+
+# --- Configure SSH Server ---
+RUN \
+    mkdir -p /var/run/sshd && \
+    # Allow password auth & root login (for easier debugging in test env)
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    # Enable SSH service via systemd (it will be started by systemd later)
+    systemctl enable ssh
+
+# --- Prepare for Your Setup Scripts ---
+# Create the directory structure your scripts expect inside the container
+RUN mkdir -p /boot/firmware/setup_scripts \
+             /boot/firmware/monitoring_app \
+             /boot/firmware/udev_rules
+
+# Copy your scripts, config, and app code from the build context into the image
+# These files MUST exist in the same directory as the Dockerfile, or a subdirectory
+COPY .env                      /boot/firmware/.env
+COPY firstrun.sh               /boot/firmware/firstrun.sh
+COPY setup_scripts/*.sh        /boot/firmware/setup_scripts/
+COPY monitoring_app            /boot/firmware/monitoring_app/
+COPY udev_rules/*.rules        /boot/firmware/udev_rules/
+
+# Ensure your scripts are executable within the image
+RUN chmod +x /boot/firmware/firstrun.sh /boot/firmware/setup_scripts/*.sh
+
+# --- Systemd Init Setup ---
+# Needed for systemd as PID 1 - prevents systemd from trying to wipe it
+RUN touch /etc/machine-id
+
+# Expose SSH port for accessing the test environment
+EXPOSE 22
+# Expose other ports your services might use (optional, can map at runtime)
+# EXPOSE 8080
+# EXPOSE 8081
+# EXPOSE 5000 # Example Flask default
+
+# Start systemd as the main container process when the container runs
+CMD ["/lib/systemd/systemd"]
