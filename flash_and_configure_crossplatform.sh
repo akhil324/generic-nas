@@ -5,7 +5,7 @@
 # Designed to be cross-platform (Linux/macOS).
 
 # Exit immediately if a command exits with a non-zero status.
-set -e
+# set -ex
 # Treat unset variables as an error when substituting.
 # set -u # Disabled as grep/cut might return empty strings legitimately
 # Ensure pipeline failures are caught.
@@ -16,6 +16,7 @@ ENV_FILE=".env" # Default name, can be overridden by argument
 OS_TYPE=""
 MOUNT_POINT="" # Global variable for cleanup in error handler
 BOOT_PARTITION="" # Global variable for cleanup in error handler
+selected_device="" # Global variable to hold the chosen device
 
 # --- Functions ---
 usage() {
@@ -36,7 +37,6 @@ detect_os() {
 check_root() {
   if [[ "$EUID" -ne 0 ]]; then
     error "This script must be run as root (use sudo)."
-    # exit 1 # error function now handles exit
   fi
 }
 
@@ -44,7 +44,7 @@ check_tools() {
   local missing=0
   local common_tools="dd mktemp openssl cp chmod grep cut sed"
   local linux_tools="lsblk partprobe mount umount realpath"
-  local macos_tools="diskutil realpath" # realpath might need 'brew install coreutils' on macOS if not built-in
+  local macos_tools="diskutil realpath"
 
   for tool in $common_tools; do
     if ! command -v "$tool" &> /dev/null; then
@@ -60,10 +60,13 @@ check_tools() {
         missing=1
       fi
     done
+    if ! command -v xzcat &> /dev/null && [[ "$(grep '^IMAGE_FILE=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')" == *.xz ]]; then
+        echo "ERROR: 'xzcat' command needed for .xz image but not found. Install 'xz-utils' or similar."
+        missing=1
+    fi
   elif [[ "$OS_TYPE" == "Darwin" ]]; then
     for tool in $macos_tools; do
       if ! command -v "$tool" &> /dev/null; then
-        # Provide hint for realpath on macOS
         if [[ "$tool" == "realpath" ]]; then
              echo "ERROR: Required macOS tool '$tool' not found. Try 'brew install coreutils'."
         else
@@ -78,6 +81,10 @@ check_tools() {
     if ! command -v rsync &> /dev/null; then
         echo "WARN: 'rsync' command not found. Directory copy might be less efficient."
     fi
+    if ! command -v xzcat &> /dev/null && [[ "$(grep '^IMAGE_FILE=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')" == *.xz ]]; then
+        echo "ERROR: 'xzcat' command needed for .xz image but not found. Install 'xz' or similar (e.g., 'brew install xz')."
+        missing=1
+    fi
   fi
 
   if ! command -v openssl &> /dev/null; then
@@ -87,7 +94,6 @@ check_tools() {
 
   if [[ "$missing" -eq 1 ]]; then
     error "Please install missing tools and try again."
-    # exit 1 # error function now handles exit
   fi
 }
 
@@ -110,7 +116,7 @@ error() {
 }
 
 
-# --- Argument Parsing ---
+# --- Argument Parsing
 while getopts ":e:" opt; do
   case ${opt} in
     e ) ENV_FILE=$OPTARG ;;
@@ -124,58 +130,34 @@ if [[ ! -f "$ENV_FILE" ]]; then
   usage
 fi
 
-# --- Detect OS ---
+# --- Detect OS
 detect_os
 
-# --- Load Environment Variables ---
-# Use grep/cut for safety, remove potential surrounding quotes
-TARGET_DEVICE=$(grep '^TARGET_DEVICE=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')
+# --- Load Environment Variables
+
 IMAGE_FILE=$(grep '^IMAGE_FILE=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')
 SET_USERNAME=$(grep '^SET_USERNAME=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')
 SET_PASSWORD=$(grep '^SET_PASSWORD=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')
 ENABLE_SSH=$(grep '^ENABLE_SSH=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' | tr '[:upper:]' '[:lower:]')
 SSH_PUB_KEY_FILE=$(grep '^SSH_PUB_KEY_FILE=' "$ENV_FILE" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//')
 
-# --- Validations ---
+# --- Validations
 check_root
 check_tools # Check tools after detecting OS
-
-if [[ -z "$TARGET_DEVICE" ]]; then
-    error "TARGET_DEVICE is not set in $ENV_FILE."
-fi
-
-# OS-specific device validation
-if [[ "$OS_TYPE" == "Linux" ]]; then
-    if [[ ! -b "$TARGET_DEVICE" ]]; then
-        error "TARGET_DEVICE ('$TARGET_DEVICE') is not a valid block device on Linux. Use 'lsblk'."
-    fi
-elif [[ "$OS_TYPE" == "Darwin" ]]; then
-    if [[ ! "$TARGET_DEVICE" =~ ^/dev/disk[0-9]+$ ]]; then
-        error "TARGET_DEVICE ('$TARGET_DEVICE') on macOS should be like /dev/diskN (whole disk). Use 'diskutil list'."
-    fi
-    if ! diskutil list "$TARGET_DEVICE" &> /dev/null; then
-        error "TARGET_DEVICE ('$TARGET_DEVICE') not found by diskutil."
-    fi
-fi
 
 if [[ -z "$IMAGE_FILE" || ! -f "$IMAGE_FILE" ]]; then
   error "IMAGE_FILE ('$IMAGE_FILE') is not set or not a valid file."
 fi
-
 if [[ -z "$SET_USERNAME" ]]; then
     error "SET_USERNAME not set in $ENV_FILE."
 fi
-
 if [[ "$ENABLE_SSH" != "true" && "$ENABLE_SSH" != "false" ]]; then
     error "ENABLE_SSH must be 'true' or 'false'."
 fi
-
 if [[ -n "$SSH_PUB_KEY_FILE" && ! -f "$SSH_PUB_KEY_FILE" ]]; then
     error "SSH_PUB_KEY_FILE ('$SSH_PUB_KEY_FILE') is set but file not found."
 fi
-
-# Check existence of source scripts/dirs relative to this script
-SCRIPT_DIR=$(dirname "$(realpath "$0")") # Get directory where this script resides
+SCRIPT_DIR=$(dirname "$(realpath "$0")") # Keep original script dir logic
 if [[ ! -f "${SCRIPT_DIR}/firstrun.sh" || \
       ! -d "${SCRIPT_DIR}/setup_scripts" || \
       ! -d "${SCRIPT_DIR}/monitoring_app" || \
@@ -184,16 +166,70 @@ if [[ ! -f "${SCRIPT_DIR}/firstrun.sh" || \
 fi
 
 
+# --- Interactive Disk Selection ---
+echo "INFO: Detecting available block devices..."
+declare -a devices
+declare -a device_infos
+
+if [[ "$OS_TYPE" == "Linux" ]]; then
+    # Initialize arrays
+    devices=()
+    device_infos=()
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue # Skip empty lines
+        devices+=("$(echo "$line" | awk '{print $1}')")
+        device_infos+=("$line")
+    done < <(lsblk -d -n -p -o NAME,SIZE,MODEL | grep -v 'loop')
+elif [[ "$OS_TYPE" == "Darwin" ]]; then
+    # Initialize arrays
+    devices=()
+    device_infos=()
+    # Pipe only device paths, get info inside loop
+    while IFS= read -r dev_path; do
+        [[ -z "$dev_path" ]] && continue # Skip empty lines
+        # Get info for this specific device path
+        info=$(diskutil info "$dev_path" | grep -E 'Total Size|Device / Media Name' | cut -d ':' -f2 | xargs | paste -sd ' ' -)
+        devices+=("$dev_path")
+        device_infos+=("$dev_path ($info)")
+    done < <(diskutil list external physical | grep '^/dev/disk' | awk '{print $1}')
+else
+    error "Internal error: OS detection failed or unsupported OS." # Should not happen if detect_os worked
+fi
+
+if [[ ${#devices[@]} -eq 0 ]]; then
+    error "No suitable external devices found."
+fi
+
+echo "INFO: Available devices:"
+for i in "${!devices[@]}"; do
+    printf "  [%d]\t%s\n" "$((i+1))" "${device_infos[$i]}"
+done
+
+while true; do
+    read -p "Enter the number of the device to flash: " selected_device_index
+    if [[ "$selected_device_index" =~ ^[0-9]+$ ]] && \
+       [[ "$selected_device_index" -ge 1 ]] && \
+       [[ "$selected_device_index" -le ${#devices[@]} ]]; then
+        selected_device="${devices[$((selected_device_index-1))]}" # Assign selection to global variable
+        echo "INFO: You selected: ${device_infos[$((selected_device_index-1))]}"
+        break
+    else
+        echo "Invalid selection. Please enter a number between 1 and ${#devices[@]}."
+    fi
+done
+
+
 # --- Safety Confirmation ---
 echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-echo "This script will ERASE ALL DATA on the device: $TARGET_DEVICE"
+# --- Use selected_device ---
+echo "This script will ERASE ALL DATA on the device: $selected_device"
 echo "It will write the image: $IMAGE_FILE"
 echo "Target Username: $SET_USERNAME"
 echo "--- Device Details ---"
 if [[ "$OS_TYPE" == "Linux" ]]; then
-    lsblk "$TARGET_DEVICE"
+    lsblk "$selected_device"
 elif [[ "$OS_TYPE" == "Darwin" ]]; then
-    diskutil list "$TARGET_DEVICE"
+    diskutil list "$selected_device"
 fi
 echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 read -p "ARE YOU ABSOLUTELY SURE? Type 'YES' in uppercase to proceed: " confirmation
@@ -203,23 +239,23 @@ if [[ "$confirmation" != "YES" ]]; then
 fi
 
 # --- Unmount Existing Partitions ---
-echo "INFO: Unmounting any existing partitions on $TARGET_DEVICE..."
+echo "INFO: Unmounting any existing partitions on $selected_device..."
 if [[ "$OS_TYPE" == "Linux" ]]; then
-    umount "${TARGET_DEVICE}"* &> /dev/null || true # Ignore errors if not mounted
+    umount "${selected_device}"* &> /dev/null || true # Ignore errors if not mounted
 elif [[ "$OS_TYPE" == "Darwin" ]]; then
-    diskutil unmountDisk "$TARGET_DEVICE" || true # Ignore errors
+    diskutil unmountDisk "$selected_device" || true # Ignore errors
 fi
 sync
 sleep 1
 
 # --- Write Image ---
-echo "INFO: Writing image '$IMAGE_FILE' to '$TARGET_DEVICE'..."
+echo "INFO: Writing image '$IMAGE_FILE' to '$selected_device'..."
 echo "INFO: This may take a long time."
 
-DD_TARGET="$TARGET_DEVICE"
+DD_TARGET="$selected_device"
 if [[ "$OS_TYPE" == "Darwin" ]]; then
     # Use raw device on macOS for potentially better performance
-    RAW_TARGET="/dev/r$(basename "$TARGET_DEVICE")"
+    RAW_TARGET="/dev/r$(basename "$selected_device")"
     if [[ -c "$RAW_TARGET" ]]; then
         DD_TARGET="$RAW_TARGET"
         echo "INFO: Using raw device $DD_TARGET on macOS."
@@ -228,59 +264,72 @@ if [[ "$OS_TYPE" == "Darwin" ]]; then
     fi
 fi
 
-if command -v pv &> /dev/null; then
-  pv "$IMAGE_FILE" | dd of="$DD_TARGET" bs=4M conv=fsync status=none
+# Check if image is compressed
+if [[ "$IMAGE_FILE" == *.xz ]]; then
+    echo "INFO: Detected .xz compression. Decompressing on the fly."
+    if command -v pv &> /dev/null; then
+      xzcat "$IMAGE_FILE" | pv | dd of="$DD_TARGET" bs=4M conv=fsync status=none
+    else
+      if [[ "$OS_TYPE" == "Linux" ]]; then
+        xzcat "$IMAGE_FILE" | dd of="$DD_TARGET" bs=4M conv=fsync status=progress
+      elif [[ "$OS_TYPE" == "Darwin" ]]; then
+        echo "INFO: 'pv' not found. Use Ctrl+T in this terminal to check dd progress."
+        xzcat "$IMAGE_FILE" | dd of="$DD_TARGET" bs=4M conv=fsync
+      fi
+    fi
 else
-  if [[ "$OS_TYPE" == "Linux" ]]; then
-    dd if="$IMAGE_FILE" of="$DD_TARGET" bs=4M conv=fsync status=progress
-  elif [[ "$OS_TYPE" == "Darwin" ]]; then
-    echo "INFO: 'pv' not found. Use Ctrl+T in this terminal to check dd progress."
-    dd if="$IMAGE_FILE" of="$DD_TARGET" bs=4M conv=fsync
-  fi
+    # Original logic for uncompressed images
+    echo "INFO: Writing uncompressed image."
+    if command -v pv &> /dev/null; then
+      pv "$IMAGE_FILE" | dd of="$DD_TARGET" bs=4M conv=fsync status=none
+    else
+      if [[ "$OS_TYPE" == "Linux" ]]; then
+        dd if="$IMAGE_FILE" of="$DD_TARGET" bs=4M conv=fsync status=progress
+      elif [[ "$OS_TYPE" == "Darwin" ]]; then
+        echo "INFO: 'pv' not found. Use Ctrl+T in this terminal to check dd progress."
+        dd if="$IMAGE_FILE" of="$DD_TARGET" bs=4M conv=fsync
+      fi
+    fi
 fi
+
 echo "INFO: Image write complete. Flushing buffers..."
 sync
 sleep 2 # Give kernel time to settle
 
-# --- Reread Partition Table / Ensure Partitions Visible ---
+# --- Reread Partition Table / Ensure Partitions Visible
 echo "INFO: Ensuring partitions are visible..."
 if [[ "$OS_TYPE" == "Linux" ]]; then
-    partprobe "$TARGET_DEVICE" || echo "WARN: partprobe failed, continuing..."
+    partprobe "$selected_device" || echo "WARN: partprobe failed, continuing..."
 elif [[ "$OS_TYPE" == "Darwin" ]]; then
     # macOS usually detects changes, but unmounting/remounting can help
-    diskutil unmountDisk "$TARGET_DEVICE" || true
+    diskutil unmountDisk "$selected_device" || true
     sleep 3 # Give it more time
-    diskutil mountDisk "$TARGET_DEVICE" || echo "WARN: diskutil mountDisk failed after write, continuing..."
+    diskutil mountDisk "$selected_device" || echo "WARN: diskutil mountDisk failed after write, continuing..."
 fi
 sleep 2 # Give kernel more time
 
 # --- Identify Boot Partition ---
-# BOOT_PARTITION is now global for error handler
 BOOT_PARTITION=""
 if [[ "$OS_TYPE" == "Linux" ]]; then
-    if [[ -b "${TARGET_DEVICE}1" ]]; then
-        BOOT_PARTITION="${TARGET_DEVICE}1"
-    elif [[ -b "${TARGET_DEVICE}p1" ]]; then
-        BOOT_PARTITION="${TARGET_DEVICE}p1"
+    if [[ -b "${selected_device}1" ]]; then
+        BOOT_PARTITION="${selected_device}1"
+    elif [[ -b "${selected_device}p1" ]]; then
+        BOOT_PARTITION="${selected_device}p1"
     fi
 elif [[ "$OS_TYPE" == "Darwin" ]]; then
     # Raspberry Pi images typically use MBR or Hybrid MBR, boot is slice 1
-    BOOT_PARTITION="${TARGET_DEVICE}s1"
-    # Verify it exists
+    BOOT_PARTITION="${selected_device}s1"
     if ! diskutil list "$BOOT_PARTITION" &> /dev/null; then
          error "Could not find expected boot partition $BOOT_PARTITION on macOS."
-         # exit 1 # error function handles exit
     fi
 fi
 
 if [[ -z "$BOOT_PARTITION" ]]; then
-    error "Could not automatically determine boot partition for $TARGET_DEVICE."
-    # exit 1 # error function handles exit
+    error "Could not automatically determine boot partition for $selected_device."
 fi
 echo "INFO: Determined boot partition: $BOOT_PARTITION"
 
 # --- Mount Boot Partition ---
-# MOUNT_POINT is now global for error handler
 MOUNT_POINT=$(mktemp -d)
 echo "INFO: Mounting $BOOT_PARTITION to $MOUNT_POINT..."
 if [[ "$OS_TYPE" == "Linux" ]]; then
@@ -325,7 +374,7 @@ cp "${SCRIPT_DIR}/udev_rules/99-share-automount.rules" "${MOUNT_POINT}/udev_rule
 echo "INFO: Copying .env configuration file..."
 cp "$ENV_FILE" "${MOUNT_POINT}/.env" || error "Failed to copy $ENV_FILE"
 
-# --- Apply Base OS Customizations (SSH, userconf) ---
+# --- Apply Base OS Customizations (SSH, userconf)
 echo "INFO: Applying base OS customizations..."
 
 # 1. Enable SSH
@@ -342,7 +391,6 @@ if [[ -n "$SET_PASSWORD" ]]; then
     ENCRYPTED_PASSWORD=$(openssl passwd -6 -salt "$SALT" "$SET_PASSWORD")
     if [[ -z "$ENCRYPTED_PASSWORD" ]]; then
         error "Failed to generate encrypted password with openssl."
-        # exit 1 # error function handles exit
     fi
     echo "INFO: Creating userconf.txt..."
     echo "${SET_USERNAME}:${ENCRYPTED_PASSWORD}" > "$MOUNT_POINT/userconf.txt" || error "Failed to write userconf.txt"
@@ -356,7 +404,6 @@ fi
 # and embedding the content. We just need to ensure the SSH_PUB_KEY_FILE variable is set correctly in .env
 if [[ -n "$SSH_PUB_KEY_FILE" ]]; then
     echo "INFO: SSH Public Key file specified in .env. firstrun.sh will attempt to add it."
-    # Optional: Add a check here to ensure the key file is readable?
     if [[ ! -r "$SSH_PUB_KEY_FILE" ]]; then
         warn "Specified SSH_PUB_KEY_FILE '$SSH_PUB_KEY_FILE' is not readable. Key may not be added."
     fi
@@ -367,7 +414,6 @@ fi
 CMDLINE_FILE=""
 FIRST_RUN_TRIGGER_PATH=""
 # Check for Bookworm path first (adjust if RPi OS changes mount structure)
-# NOTE: Path check needs to use $MOUNT_POINT
 if [[ -f "${MOUNT_POINT}/firmware/cmdline.txt" ]]; then
     CMDLINE_FILE="${MOUNT_POINT}/firmware/cmdline.txt"
     FIRST_RUN_TRIGGER_PATH="/boot/firmware/firstrun.sh" # Path as seen by Pi's systemd
@@ -376,7 +422,6 @@ elif [[ -f "${MOUNT_POINT}/cmdline.txt" ]]; then # Older path
     FIRST_RUN_TRIGGER_PATH="/boot/firstrun.sh" # Path as seen by Pi's systemd
 else
     error "Cannot find cmdline.txt on boot partition ($MOUNT_POINT)."
-    # exit 1 # error function handles exit
 fi
 
 echo "INFO: Modifying $CMDLINE_FILE to trigger $FIRST_RUN_TRIGGER_PATH..."
@@ -407,7 +452,7 @@ BOOT_PARTITION=""
 
 echo "-----------------------------------------------------"
 echo "SUCCESS: Image written and configured."
-echo "Device: $TARGET_DEVICE"
+echo "Device: $selected_device"
 echo "You can now remove the USB device/SD card."
 echo "On first boot, the Raspberry Pi will apply remaining settings via firstrun.sh."
 echo "Monitor logs in /var/log/firstrun/ on the Pi for details."
